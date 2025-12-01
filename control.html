@@ -1,0 +1,1491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alve Web Interface</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1.3.0/build/roslib.min.js"></script>
+    <script type="text/javascript" src="https://s3.eu-west-1.amazonaws.com/rosject.io/js/roslib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@5.0.1/lib/eventemitter2.min.js"></script>
+    <script type="text/javascript" src="mjpegcanvas.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="icon" type="image/png" href="image_inverse_color.png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+            overflow-x: hidden;
+            min-height: 100vh;
+            padding-bottom: 80px; /* Space for dock */
+        }
+
+        #video-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
+            height: auto;
+            z-index: -100;
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: -99;
+        }
+
+        .container {
+            z-index: 1;
+            position: relative;
+            padding: 20px;
+        }
+
+        /* Dock Styles */
+        .dock {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 10px 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            z-index: 1000;
+        }
+
+        .dock-button {
+            width: 60px;
+            height: 60px;
+            border-radius: 10px;
+            margin: 0 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: white;
+            font-size: 24px;
+        }
+
+        .dock-button:hover {
+            transform: translateY(-10px) scale(1.2);
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .dock-button.active {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-5px);
+        }
+
+        /* Mac-style Window */
+        .mac-window {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%;
+            max-width: 900px;
+            height: 70vh;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            overflow: hidden;
+            display: none;
+            z-index: 100;
+        }
+
+        .mac-window.active {
+            display: block;
+        }
+
+        .window-header {
+            height: 30px;
+            background: rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .window-buttons {
+            display: flex;
+            gap: 6px;
+        }
+
+        .window-button {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .close-button {
+            background: #ff5f57;
+        }
+
+        .minimize-button {
+            background: #ffbd2e;
+        }
+
+        .maximize-button {
+            background: #28c940;
+        }
+
+        .window-title {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .window-content {
+            height: calc(100% - 30px);
+            padding: 20px;
+            overflow: auto;
+        }
+
+        /* Window-specific styles */
+        .joystick-zone {
+            position: relative;
+            display: inline-block;
+            width: 200px;
+            height: 200px;
+            border: 1px solid #333;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            z-index: 10;
+            -moz-user-select: -moz-none;
+            -khtml-user-select: none;
+            -webkit-user-select: none;
+            margin: 10px;
+        }
+        
+        .joystick-handle {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: rgba(200, 0, 0, 0.7);
+            z-index: 11;
+            pointer-events: none;
+        }
+        
+        #moveJoystick { background-color: rgba(0, 180, 100, 0.2); }
+        #rotateJoystick { background-color: rgba(100, 100, 255, 0.2); }
+        
+        .joystick-container {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+        
+        .values-display {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .control-param {
+            margin: 10px 0;
+        }
+        
+        .slider-container {
+            display: flex;
+            align-items: center;
+        }
+        
+        .slider-container label {
+            min-width: 150px;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            border-radius: 10px;
+            margin: 0 auto;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        #cameraFeed, #depthCameraFeed {
+            width: 100% !important;
+            height: 100% !important;
+            position: relative;
+        }
+
+        /* Style the canvas to maintain aspect ratio while filling container */
+        #cameraFeed canvas, #depthCameraFeed canvas {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: contain;
+            background-color: #000;
+        }
+
+        /* Adjust window content for camera windows */
+        .mac-window:has(#cameraFeed),
+        .mac-window:has(#depthCameraFeed) {
+            max-width: 1000px;
+        }
+
+        .mac-window:has(#cameraFeed) .window-content,
+        .mac-window:has(#depthCameraFeed) .window-content {
+            padding: 10px;
+            height: calc(100% - 30px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .fullscreen-toggle {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 100;
+            transition: all 0.3s ease;
+        }
+
+        .fullscreen-toggle:hover {
+            background: rgba(0, 0, 0, 0.8);
+            transform: scale(1.1);
+        }
+
+        .odometry-container {
+            padding: 15px;
+        }
+
+        .odometry-container .values-display {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+
+        .odometry-container p {
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+        .date-time-display {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    color: white;
+    font-size: 14px;
+    text-align: right;
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    padding: 8px 12px;
+    border-radius: 8px;
+    z-index: 999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.time {
+    font-size: 20px;
+    font-weight: 300;
+}
+
+.date {
+    font-size: 12px;
+    opacity: 0.8;
+    margin-top: 2px;
+}
+.power-button {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    transition: all 0.3s ease;
+}
+
+.power-button:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+}
+
+.power-button i {
+    color: white;
+    font-size: 14px;
+}
+
+/* Fullscreen styles */
+:fullscreen #cameraFeed,
+:fullscreen #depthCameraFeed {
+    width: 100vw !important;
+    height: 100vh !important;
+    background-color: #000;
+}
+
+:fullscreen #cameraFeed canvas,
+:fullscreen #depthCameraFeed canvas {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain;
+}
+
+:-webkit-full-screen #cameraFeed,
+:-webkit-full-screen #depthCameraFeed {
+    width: 100vw !important;
+    height: 100vh !important;
+    background-color: #000;
+}
+
+:-webkit-full-screen #cameraFeed canvas,
+:-webkit-full-screen #depthCameraFeed canvas {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain;
+}
+
+:-ms-fullscreen #cameraFeed,
+:-ms-fullscreen #depthCameraFeed {
+    width: 100vw !important;
+    height: 100vh !important;
+    background-color: #000;
+}
+
+:-ms-fullscreen #cameraFeed canvas,
+:-ms-fullscreen #depthCameraFeed canvas {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain;
+}
+/* Quad view styles */
+.quad-view-active .dock-button:not(.quad-view-button) {
+    opacity: 0.7;
+}
+
+.quad-view-active .dock-button.quad-view-button {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-5px);
+}
+
+.mac-window.quad-view {
+    border: 2px solid rgba(255, 255, 255, 0.3);
+}
+    </style>
+</head>
+
+<body>
+
+    
+    <div id="dateTimeDisplay" class="date-time-display">
+    <div class="time" id="currentTime">10:30 AM</div>
+    <div class="date" id="currentDate">Monday, January 1</div>
+</div>
+
+    <audio id="startupSound" src="interface.mp3" preload="auto"></audio>
+    <audio id="powerOffSound" src="power_off.mp3" preload="auto"></audio>
+    <!-- Video Background -->
+    <video autoplay muted loop id="video-background">
+        <source src="video.mp4" type="video/mp4">
+        Your browser does not support HTML5 video.
+    </video>
+    <div class="overlay"></div>
+
+    <div id="app" class="container">
+        <div class="power-button" @click="goToHome">
+    <i class="fas fa-power-off"></i>
+</div>
+        <!-- Dock with buttons -->
+        <div class="dock">
+            <div class="dock-button" @click="toggleWindow('controller')" :class="{active: activeWindow === 'controller'}">
+                <i class="fas fa-gamepad"></i>
+            </div>
+            <div class="dock-button" @click="toggleWindow('camera')" :class="{active: activeWindow === 'camera'}">
+                <i class="fas fa-camera"></i>
+            </div>
+            <div class="dock-button" @click="toggleWindow('odometry')" :class="{active: activeWindow === 'odometry'}">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <div class="dock-button" @click="toggleWindow('depth')" :class="{active: activeWindow === 'depth'}">
+                <i class="fas fa-image"></i>
+            </div>
+            <div class="dock-button quad-view-button" @click="toggleQuadView" :class="{active: isQuadViewActive}">
+                <i class="fas fa-th-large"></i>
+            </div>
+        </div>
+
+        <!-- Mac-style Windows -->
+        <!-- Controller Window -->
+        <div class="mac-window" :class="{active: activeWindow === 'controller'}">
+            <div class="window-header">
+                <div class="window-buttons">
+                    <div class="window-button close-button" @click="closeWindow('controller')" data-window="controller"></div>
+                    <div class="window-button minimize-button" @click="minimizeWindow($event)" data-window="controller"></div>
+                    <div class="window-button maximize-button" @click="maximizeWindow($event)" data-window="controller"></div>
+                </div>
+                <div class="window-title">Mecanum Drive Controller</div>
+            </div>
+            <div class="window-content">
+                <div class="joystick-container">
+                    <div>
+                        <h4 class="text-center">Movement</h4>
+                        <div id="moveJoystick" class="joystick-zone" 
+                             @mousedown="startDrag('move', $event)" 
+                             @touchstart="startDrag('move', $event)"
+                             @mousemove="doDrag($event)" 
+                             @touchmove="doDrag($event)"
+                             @mouseup="stopDrag('move')"
+                             @touchend="stopDrag('move')"></div>
+                    </div>
+                    <div>
+                        <h4 class="text-center">Rotation</h4>
+                        <div id="rotateJoystick" class="joystick-zone" 
+                             @mousedown="startDrag('rotate', $event)"
+                             @touchstart="startDrag('rotate', $event)"
+                             @mousemove="doDrag($event)" 
+                             @touchmove="doDrag($event)"
+                             @mouseup="stopDrag('rotate')"
+                             @touchend="stopDrag('rotate')"></div>
+                    </div>
+                </div>
+                
+                <div class="values-display">
+                    <h4 class="text-center">Control Values</h4>
+                    <div class="row text-center">
+                        <div class="col-md-4">
+                            <p>Left/Right: {{ joystick.left_right.toFixed(3) }}</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p>Forward/Back: {{ joystick.forward_back.toFixed(3) }}</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p>Rotation: {{ joystick.rotation.toFixed(3) }}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="control-params mt-3">
+                    <h4 class="text-center">Control Parameters</h4>
+                    <div class="control-param">
+                        <div class="slider-container">
+                            <label>Max Linear Speed:</label>
+                            <input type="range" min="0.1" max="1.0" step="0.1" v-model="max_linear_speed" class="form-control">
+                            <span class="ml-2">{{ max_linear_speed }} m/s</span>
+                        </div>
+                    </div>
+                    <div class="control-param">
+                        <div class="slider-container">
+                            <label>Max Angular Speed:</label>
+                            <input type="range" min="0.5" max="3.0" step="0.1" v-model="max_angular_speed" class="form-control">
+                            <span class="ml-2">{{ max_angular_speed }} rad/s</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Camera Window -->
+        <div class="mac-window" :class="{active: activeWindow === 'camera'}">
+            <div class="window-header">
+                <div class="window-buttons">
+                    <div class="window-button close-button" @click="closeWindow('camera')" data-window="camera"></div>
+                <div class="window-button minimize-button" @click="minimizeWindow($event)" data-window="camera"></div>
+                <div class="window-button maximize-button" @click="maximizeWindow($event)" data-window="camera"></div>
+                </div>
+                <div class="window-title">Camera Feed</div>
+            </div>
+            <div class="window-content">
+                <div class="camera-container">
+                    <div id="cameraFeed" style="width: 100%; height: 400px;"></div>
+                    <div class="fullscreen-toggle" @click="toggleFullscreen('cameraFeed')">
+                        <i class="fas fa-expand"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Odometry Window -->
+        <div class="mac-window" :class="{active: activeWindow === 'odometry'}">
+            <div class="window-header">
+                <div class="window-buttons">
+                    <div class="window-button close-button" @click="closeWindow('odometry')" data-window="odometry"></div>
+                    <div class="window-button minimize-button" @click="minimizeWindow($event)" data-window="odometry"></div>
+                    <div class="window-button maximize-button" @click="maximizeWindow($event)" data-window="odometry"></div>
+                </div>
+                <div class="window-title">Odometry Data</div>
+            </div>
+            <div class="window-content">
+                <div class="odometry-container">
+                    <p>Odometry data for Alve Robot X Y Z position</p>
+                    <div class="values-display">
+                        <div class="row text-center">
+                            <div class="col-md-4">
+                                <p>X: {{ position.x.toFixed(2) }} m</p>
+                            </div>
+                            <div class="col-md-4">
+                                <p>Y: {{ position.y.toFixed(2) }} m</p>
+                            </div>
+                            <div class="col-md-4">
+                                <p>Z: {{ position.z.toFixed(2) }} m</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Depth Camera Window -->
+        <div class="mac-window" :class="{active: activeWindow === 'depth'}">
+            <div class="window-header">
+                <div class="window-buttons">
+                    <div class="window-button close-button" @click="closeWindow('depth')" data-window="depth"></div>
+                <div class="window-button minimize-button" @click="minimizeWindow($event)" data-window="depth"></div>
+                <div class="window-button maximize-button" @click="maximizeWindow($event)" data-window="depth"></div>
+                </div>
+                <div class="window-title">Depth Camera</div>
+            </div>
+            <div class="window-content">
+                <div class="camera-container">
+                    <div id="depthCameraFeed" style="width: 100%; height: 400px;"></div>
+                    <div class="fullscreen-toggle" @click="toggleFullscreen('depthCameraFeed')">
+                        <i class="fas fa-expand"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        new Vue({
+            el: "#app",
+            data: {
+                isQuadViewActive: false,
+    quadViewState: {
+        controller: { x: 0, y: 0, width: '50%', height: '50%' },
+        camera: { x: '50%', y: 0, width: '50%', height: '50%' },
+        odometry: { x: 0, y: '50%', width: '50%', height: '50%' },
+        depth: { x: '50%', y: '50%', width: '50%', height: '50%' }
+    },
+                connectionStatus: 'disconnected',
+                cameraViewer: null,
+                depthCameraViewer: null,
+                reconnectAttempts: 0,
+                maxReconnectAttempts: 10,
+                windowStates: {
+            controller: { minimized: false, maximized: false },
+            camera: { minimized: false, maximized: false },
+            odometry: { minimized: false, maximized: false },
+            depth: { minimized: false, maximized: false }
+        },
+    
+                activeWindow: null,
+                audioPlayed: false,
+                // ros connection
+                ros: null,
+                rosbridge_address: 'ws://localhost:9090',
+                // joystick values
+                joystick: {
+                    left_right: 0,
+                    forward_back: 0,
+                    rotation: 0
+                },
+                activeJoystick: null,
+                moveHandle: { x: 100, y: 100 },
+                rotateHandle: { x: 100, y: 100 },
+                // control parameters
+                max_linear_speed: 0.5,
+                max_angular_speed: 1.5,
+                deadzone: 0.1,
+                // publisher
+                cmdVelPublisher: null,
+                publishInterval: null,
+                position: { x: 0, y: 0, z: 0 },
+                odomTopic: null,
+            },
+            methods: {
+                toggleQuadView: function() {
+       if (this.isQuadViewActive) {
+        // Exit quad view - close all windows and reset their positions
+        this.isQuadViewActive = false;
+        this.activeWindow = null; // This was already there
+        document.body.classList.remove('quad-view-active');
+        
+        // Hide all windows and reset their styles
+        const windows = document.querySelectorAll('.mac-window');
+        windows.forEach(window => {
+            window.style.display = 'none'; // This was already there
+            window.style.transform = 'translate(-50%, -50%)';
+            window.style.width = '80%';
+            window.style.height = '70vh';
+            window.style.maxWidth = '900px';
+            window.style.left = '50%';
+            window.style.top = '50%';
+        });
+        
+        // Reset all window states
+        Object.keys(this.windowStates).forEach(windowName => {
+            this.windowStates[windowName].minimized = false;
+            this.windowStates[windowName].maximized = false;
+        });
+    }
+    else {
+        // Enter quad view - show all windows
+        this.isQuadViewActive = true;
+        document.body.classList.add('quad-view-active');
+        
+        // Position each window in its quadrant
+        for (const [windowName, position] of Object.entries(this.quadViewState)) {
+            const windowElement = document.querySelector(`.mac-window:has(.window-button[data-window="${windowName}"])`);
+            if (windowElement) {
+                windowElement.style.transform = 'none';
+                windowElement.style.width = position.width;
+                windowElement.style.height = position.height;
+                windowElement.style.maxWidth = 'none';
+                windowElement.style.left = position.x;
+                windowElement.style.top = position.y;
+                windowElement.style.display = 'block';
+                
+                // Update window state
+                if (this.windowStates[windowName]) {
+                    this.windowStates[windowName].minimized = false;
+                    this.windowStates[windowName].maximized = false;
+                }
+            }
+        }
+        
+        // Set up camera feeds after a small delay to allow DOM to update
+        setTimeout(() => {
+            if (this.cameraViewer) {
+                this.removeCamera();
+                this.setupCamera();
+            }
+            if (this.depthCameraViewer) {
+                this.removeDepthCamera();
+                this.setupDepthCamera();
+            }
+        }, 100);
+    }
+},
+                monitorROSConnection: function() {
+    if (!this.ros) return;
+    
+    this.ros.on('connection', () => {
+        console.log('Connected to ROSBridge!');
+        this.connectionStatus = 'connected';
+        
+        // Reinitialize camera feeds after connection
+        if (this.activeWindow === 'camera') {
+            setTimeout(() => {
+                this.removeCamera();
+                this.setupCamera();
+            }, 500);
+        }
+        if (this.activeWindow === 'depth') {
+            setTimeout(() => {
+                this.removeDepthCamera();
+                this.setupDepthCamera();
+            }, 500);
+        }
+    });
+
+    this.ros.on('error', (error) => {
+        console.log('Error connecting to ROSBridge:', error);
+        this.connectionStatus = 'error';
+    });
+
+    this.ros.on('close', () => {
+        console.log('Connection to ROSBridge closed');
+        this.connectionStatus = 'disconnected';
+        
+        // Schedule reconnection
+        setTimeout(() => {
+            console.log('Attempting to reconnect to ROS...');
+            this.connect();
+        }, 3000);
+    });
+},
+
+             handleResize: function() {
+        if (this.activeWindow === 'camera') {
+            this.removeCamera();
+            setTimeout(() => this.setupCamera(), 100);
+        }
+        if (this.activeWindow === 'depth') {
+            this.removeDepthCamera();
+            setTimeout(() => this.setupDepthCamera(), 100);
+        }
+    },
+                goToHome: function() {
+        // Play the power off sound
+        const powerOffSound = document.getElementById('powerOffSound');
+        if (powerOffSound) {
+            powerOffSound.play()
+                .then(() => {
+                    // After sound finishes playing, navigate to home
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, powerOffSound.duration * 1000); // Wait for the sound duration
+                })
+                .catch(e => {
+                    console.log("Power off sound play failed:", e);
+                    // Navigate even if sound fails
+                    window.location.href = 'index.html';
+                });
+        } else {
+            // If sound element doesn't exist, just navigate
+            window.location.href = 'index.html';
+        }
+    },
+
+                updateDateTime: function() {
+        const now = new Date();
+        
+        // Format time (e.g., "10:30 AM")
+        const timeOptions = { hour: 'numeric', minute: '2-digit', hour12: true };
+        const timeString = now.toLocaleTimeString([], timeOptions);
+        
+        // Format date (e.g., "Monday, January 1")
+        const dateOptions = { weekday: 'long', month: 'long', day: 'numeric' };
+        const dateString = now.toLocaleDateString([], dateOptions);
+        
+        // Update the display
+        document.getElementById('currentTime').textContent = timeString;
+        document.getElementById('currentDate').textContent = dateString;
+    }
+,
+               toggleWindow: function(windowName) {
+    // First check if we're in quad view mode
+    if (this.isQuadViewActive) {
+        // If in quad view, exit quad view first
+        this.toggleQuadView();
+        
+        // Then open the clicked window normally after a short delay
+        setTimeout(() => {
+            this.activeWindow = windowName;
+            // Make sure the window is properly displayed
+            const windowElement = document.querySelector(`.mac-window:has(.window-button[data-window="${windowName}"])`);
+            if (windowElement) {
+                windowElement.style.display = 'block';
+                windowElement.style.transform = 'translate(-50%, -50%)';
+                windowElement.style.width = '80%';
+                windowElement.style.height = '70vh';
+                windowElement.style.maxWidth = '900px';
+                windowElement.style.left = '50%';
+                windowElement.style.top = '50%';
+            }
+        }, 150);
+        return;
+    }
+    
+    // Normal window toggling behavior when not in quad view
+    if (this.activeWindow === windowName) {
+        // If clicking the same window button, check if it's minimized
+        if (this.windowStates[windowName] && this.windowStates[windowName].minimized) {
+            // Restore the window if it's minimized
+            this.restoreWindow(windowName);
+        } else {
+            // Otherwise close it
+            this.activeWindow = null;
+        }
+    } else {
+        // If clicking a different window button, close current and open new one
+        this.activeWindow = windowName;
+        
+        // Make sure the new window is not minimized or maximized
+        if (this.windowStates[windowName]) {
+            this.windowStates[windowName].minimized = false;
+            this.windowStates[windowName].maximized = false;
+            
+            // Reset window styling
+            const windowElement = document.querySelector(`.mac-window:has(.window-button[data-window="${windowName}"])`);
+            if (windowElement) {
+                windowElement.style.transform = 'translate(-50%, -50%)';
+                windowElement.style.width = '80%';
+                windowElement.style.height = '70vh';
+                windowElement.style.maxWidth = '900px';
+            }
+        }
+    }
+},
+                
+                minimizeWindow: function(event) {
+            const windowName = event.target.getAttribute('data-window');
+            if (this.windowStates[windowName]) {
+                this.windowStates[windowName].minimized = true;
+                this.windowStates[windowName].maximized = false;
+                
+                // Apply minimize styling
+                const windowElement = document.querySelector(`.mac-window:has(.window-button[data-window="${windowName}"])`);
+                if (windowElement) {
+                    windowElement.style.transform = 'translate(-50%, 100vh)';
+                    windowElement.style.transition = 'transform 0.3s ease';
+                }
+            }
+        },
+        
+        maximizeWindow: function(event) {
+            const windowName = event.target.getAttribute('data-window');
+            if (this.windowStates[windowName]) {
+                this.windowStates[windowName].maximized = !this.windowStates[windowName].maximized;
+                this.windowStates[windowName].minimized = false;
+                
+                // Apply maximize/restore styling
+                const windowElement = document.querySelector(`.mac-window:has(.window-button[data-window="${windowName}"])`);
+                if (windowElement) {
+                    if (this.windowStates[windowName].maximized) {
+                        windowElement.style.width = '95vw';
+                        windowElement.style.height = '95vh';
+                        windowElement.style.maxWidth = 'none';
+                    } else {
+                        windowElement.style.width = '80%';
+                        windowElement.style.height = '70vh';
+                        windowElement.style.maxWidth = '900px';
+                    }
+                }
+            }
+        },
+        restoreWindow: function(windowName) {
+            if (this.windowStates[windowName]) {
+                this.windowStates[windowName].minimized = false;
+                
+                // Reset window styling
+                const windowElement = document.querySelector(`.mac-window:has(.window-button[data-window="${windowName}"])`);
+                if (windowElement) {
+                    windowElement.style.transform = 'translate(-50%, -50%)';
+                    windowElement.style.transition = 'transform 0.3s ease';
+                }
+            }
+        },
+        closeWindow: function(windowName) {
+    if (this.isQuadViewActive) {
+        // In quad view, closing one window hides just that window
+        const windowElement = document.querySelector(`.mac-window:has(.window-button[data-window="${windowName}"])`);
+        if (windowElement) {
+            windowElement.style.display = 'none';
+        }
+        
+        // Check if all windows are now closed
+        const visibleWindows = document.querySelectorAll('.mac-window[style*="display: block"]');
+        if (visibleWindows.length === 0) {
+            this.isQuadViewActive = false;
+            document.body.classList.remove('quad-view-active');
+            
+            // Reset all window states when all are closed
+            Object.keys(this.windowStates).forEach(winName => {
+                this.windowStates[winName].minimized = false;
+                this.windowStates[winName].maximized = false;
+            });
+        }
+    } else {
+        // Normal behavior when not in quad view
+        this.activeWindow = null;
+        if (this.windowStates[windowName]) {
+            this.windowStates[windowName].minimized = false;
+            this.windowStates[windowName].maximized = false;
+            
+            // Reset window styling
+            const windowElement = document.querySelector(`.mac-window:has(.window-button[data-window="${windowName}"])`);
+            if (windowElement) {
+                windowElement.style.transform = 'translate(-50%, -50%)';
+                windowElement.style.width = '80%';
+                windowElement.style.height = '70vh';
+                windowElement.style.maxWidth = '900px';
+                windowElement.style.display = 'none';
+            }
+        }
+    }
+}
+    ,
+
+                playStartupSound: function() {
+                    if (this.audioPlayed) return;
+                    
+                    const startupSound = document.getElementById('startupSound');
+                    if (startupSound) {
+                        startupSound.play()
+                            .then(() => {
+                                this.audioPlayed = true;
+                            })
+                            .catch(e => {
+                                console.log("Audio play failed, will try again on user interaction:", e);
+                            });
+                    }
+                },
+
+                
+                
+               removeDepthCamera: function() {
+    const container = document.getElementById('depthCameraFeed');
+    if (container) {
+        container.innerHTML = '';
+    }
+    // Properly clean up the viewer
+    if (this.depthCameraViewer) {
+        try {
+            if (this.depthCameraViewer.canvas && this.depthCameraViewer.canvas.parentNode) {
+                this.depthCameraViewer.canvas.parentNode.removeChild(this.depthCameraViewer.canvas);
+            }
+            this.depthCameraViewer = null;
+        } catch (e) {
+            console.warn('Error cleaning up depth camera viewer:', e);
+        }
+    }
+},
+                
+                setupOdometry: function() {
+                    if (!this.ros) return;
+                    
+                    // Unsubscribe from previous topic if exists
+                    if (this.odomTopic) {
+                        this.odomTopic.unsubscribe();
+                    }
+                    
+                    // Try different message types
+                    const messageTypes = [
+                        'nav_msgs/Odometry',
+                        'nav_msgs/msg/Odometry',
+                        'geometry_msgs/Pose'
+                    ];
+                    
+                    // Try each message type until we find one that works
+                    let currentTypeIndex = 0;
+                    
+                    const trySubscribe = () => {
+                        if (currentTypeIndex >= messageTypes.length) {
+                            console.error('Could not find correct message type for odometry');
+                            return;
+                        }
+                        
+                        const messageType = messageTypes[currentTypeIndex];
+                        console.log('Trying message type:', messageType);
+                        
+                        this.odomTopic = new ROSLIB.Topic({
+                            ros: this.ros,
+                            name: '/mecanum_drive_controller/odom',
+                            messageType: messageType
+                        });
+                        
+                        this.odomTopic.subscribe((message) => {
+                            console.log('Message received with type', messageType, ':', message);
+                            
+                            // Try to extract position data from different message structures
+                            if (message.pose && message.pose.pose && message.pose.pose.position) {
+                                this.position = message.pose.pose.position;
+                                console.log('Position extracted from pose.pose.position');
+                            } else if (message.pose && message.pose.position) {
+                                this.position = message.pose.position;
+                                console.log('Position extracted from pose.position');
+                            } else if (message.position) {
+                                this.position = message.position;
+                                console.log('Position extracted from position');
+                            } else {
+                                console.log('Could not find position in message structure');
+                                // Try next message type
+                                this.odomTopic.unsubscribe();
+                                currentTypeIndex++;
+                                setTimeout(trySubscribe, 100);
+                                return;
+                            }
+                            
+                            console.log('Position:', this.position);
+                        });
+                        
+                        console.log('Subscribed to odometry topic with type:', messageType);
+                    };
+                    
+                    trySubscribe();
+                },
+                
+                connect: function() {
+                    // Get the ROSBridge address from URL parameters or localStorage
+                    const urlParams = new URLSearchParams(window.location.search);
+                    this.rosbridge_address = urlParams.get('rosbridge') || 
+                                            localStorage.getItem('rosbridge') || 
+                                            this.rosbridge_address;
+
+                    this.ros = new ROSLIB.Ros({
+                        url: this.rosbridge_address
+                    });
+
+                    this.ros.on('connection', () => {
+                        console.log('Connected to ROSBridge!');
+                        
+                        // Setup publisher for joystick
+                        this.cmdVelPublisher = new ROSLIB.Topic({
+                            ros: this.ros,
+                            name: '/mecanum_drive_controller/cmd_vel',
+                            messageType: 'geometry_msgs/msg/TwistStamped'
+                        });
+
+                        // Start publishing loop
+                        this.publishInterval = setInterval(this.publishCmdVel, 50);
+                        
+                        // Set up camera feed after a short delay to ensure connection is stable
+                        setTimeout(() => {
+                            this.setupCamera();
+                            this.setupDepthCamera();
+                        }, 500);
+                        this.setupOdometry();
+                    });
+
+                    this.ros.on('error', (error) => {
+                        console.log('Error connecting to ROSBridge:', error);
+                    });
+
+                    this.ros.on('close', () => {
+                        console.log('Connection to ROSBridge closed');
+                        if (this.publishInterval) {
+                            clearInterval(this.publishInterval);
+                        }
+                        // Remove camera feed
+                        this.removeCamera();
+                        this.removeDepthCamera(); 
+                        if (this.odomTopic) {
+                            this.odomTopic.unsubscribe();
+                        }
+                    });
+                },
+
+                startDrag: function(type, event) {
+                    this.activeJoystick = type;
+                    this.updateJoystickPosition(type, event);
+                },
+
+                stopDrag: function(type) {
+                    if (this.activeJoystick === type) {
+                        this.activeJoystick = null;
+                        if (type === 'move') {
+                            this.moveHandle = { x: 100, y: 100 };
+                            this.joystick.left_right = 0;
+                            this.joystick.forward_back = 0;
+                        } else {
+                            this.rotateHandle = { x: 100, y: 100 };
+                            this.joystick.rotation = 0;
+                        }
+                        this.publishCmdVel();
+                    }
+                },
+
+                doDrag: function(event) {
+                    if (this.activeJoystick) {
+                        // Handle both mouse and touch events
+                        const clientX = event.clientX || (event.touches && event.touches[0].clientX);
+                        const clientY = event.clientY || (event.touches && event.touches[0].clientY);
+                        
+                        if (clientX && clientY) {
+                            // Create a modified event object for updateJoystickPosition
+                            const modifiedEvent = {
+                                clientX: clientX,
+                                clientY: clientY
+                            };
+                            this.updateJoystickPosition(this.activeJoystick, modifiedEvent);
+                            this.publishCmdVel();
+                        }
+                    }
+                },
+
+                updateJoystickPosition: function(type, event) {
+                    const joystickEl = document.getElementById(type + 'Joystick');
+                    const rect = joystickEl.getBoundingClientRect();
+                    const centerX = rect.width / 2;
+                    const centerY = rect.height / 2;
+                    
+                    let x = event.clientX - rect.left;
+                    let y = event.clientY - rect.top;
+                    
+                    // Constrain to joystick circle
+                    const dx = x - centerX;
+                    const dy = y - centerY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    const maxDistance = centerX;
+                    
+                    if (distance > maxDistance) {
+                        x = centerX + (dx / distance) * maxDistance;
+                        y = centerY + (dy / distance) * maxDistance;
+                    }
+                    
+                    if (type === 'move') {
+                        this.moveHandle = { x, y };
+                        // Normalize to -1.0 to 1.0 range
+                        this.joystick.left_right = ((x - centerX) / maxDistance);
+                        this.joystick.forward_back = -((y - centerY) / maxDistance); // Invert Y axis
+                    } else {
+                        this.rotateHandle = { x, y: centerY }; // Only horizontal movement for rotation
+                        this.joystick.rotation = ((x - centerX) / maxDistance);
+                    }
+                },
+
+                publishCmdVel: function() {
+                    if (!this.cmdVelPublisher) return;
+
+                    // Apply deadzone
+                    const left_right = Math.abs(this.joystick.left_right) > this.deadzone ? 
+                        this.joystick.left_right : 0;
+                    const forward_back = Math.abs(this.joystick.forward_back) > this.deadzone ? 
+                        this.joystick.forward_back : 0;
+                    const rotation = Math.abs(this.joystick.rotation) > this.deadzone ? 
+                        this.joystick.rotation : 0;
+
+                    const twist = new ROSLIB.Message({
+                        header: {
+                            stamp: {sec: 0, nanosec: 0},
+                            frame_id: 'base_link'
+                        },
+                        twist: {
+                            linear: {
+                                x: left_right * this.max_linear_speed,
+                                y: forward_back * this.max_linear_speed,
+                                z: 0.0
+                            },
+                            angular: {
+                                x: 0.0,
+                                y: 0.0,
+                                z: -rotation * this.max_angular_speed
+                            }
+                        }
+                    });
+
+                    this.cmdVelPublisher.publish(twist);
+                },
+                
+                setupCamera: function() {
+                    if (!this.ros) return;
+                    
+                    // Clear any existing content
+                    const container = document.getElementById('cameraFeed');
+                    container.innerHTML = '';
+                    
+                    // Create a wrapper div for better control
+                    const wrapper = document.createElement('div');
+                    wrapper.id = 'cameraWrapper';
+                    wrapper.style.width = '100%';
+                    wrapper.style.height = '100%';
+                    wrapper.style.position = 'relative';
+                    container.appendChild(wrapper);
+                    
+                    try {
+                        // Extract host and port from rosbridge address
+                        let wsUrl = new URL(this.rosbridge_address);
+                        let host = wsUrl.hostname;
+                        let port = '8080';
+                        
+                        // Get container dimensions
+                        const width = container.offsetWidth || 500;
+                        const height = container.offsetHeight || 400;
+                        
+                        // Create viewer with dynamic sizing
+                        this.cameraViewer = new MJPEGCANVAS.Viewer({
+                            divID: 'cameraWrapper',
+                            host: host,
+                            port: port,
+                            width: width,
+                            height: height,
+                            topic: '/camera_two/image',
+                            interval: 30
+                        });
+                        
+                        console.log('Camera viewer created for topic /camera_two/image');
+                        
+                        // Add error handling and reconnection
+                        if (this.cameraViewer && this.cameraViewer.canvas) {
+                            this.cameraViewer.canvas.onerror = () => {
+                                console.warn('Camera feed error, attempting to reconnect...');
+                                setTimeout(() => {
+                                    this.removeCamera();
+                                    this.setupCamera();
+                                }, 2000);
+                            };
+                        }
+                        
+                    } catch (error) {
+                        console.error('Error creating camera viewer:', error);
+                        container.innerHTML = '<div class="text-center p-4">Error loading camera feed. Retrying...</div>';
+                        
+                        // Retry after delay
+                        setTimeout(() => {
+                            this.removeCamera();
+                            this.setupCamera();
+                        }, 3000);
+                    }
+                },
+
+                setupDepthCamera: function() {
+                    if (!this.ros) return;
+                    
+                    // Clear any existing content
+                    const container = document.getElementById('depthCameraFeed');
+                    container.innerHTML = '';
+                    
+                    // Create a wrapper div for better control
+                    const wrapper = document.createElement('div');
+                    wrapper.id = 'depthCameraWrapper';
+                    wrapper.style.width = '100%';
+                    wrapper.style.height = '100%';
+                    wrapper.style.position = 'relative';
+                    container.appendChild(wrapper);
+                    
+                    try {
+                        // Extract host and port from rosbridge address
+                        let wsUrl = new URL(this.rosbridge_address);
+                        let host = wsUrl.hostname;
+                        let port = '8080';
+                        
+                        // Get container dimensions
+                        const width = container.offsetWidth || 500;
+                        const height = container.offsetHeight || 400;
+                        
+                        // Create viewer for depth camera
+                        this.depthCameraViewer = new MJPEGCANVAS.Viewer({
+                            divID: 'depthCameraWrapper',
+                            host: host,
+                            port: port,
+                            width: width,
+                            height: height,
+                            topic: '/camera/depth_image_normalized',
+                            transport: 'raw'
+                        });
+                        
+                        console.log('Depth camera viewer created for topic /camera/depth_image_normalized');
+                        
+                        // Add error handling and reconnection
+                        if (this.depthCameraViewer && this.depthCameraViewer.canvas) {
+                            this.depthCameraViewer.canvas.onerror = () => {
+                                console.warn('Depth camera feed error, attempting to reconnect...');
+                                setTimeout(() => {
+                                    this.removeDepthCamera();
+                                    this.setupDepthCamera();
+                                }, 2000);
+                            };
+                        }
+                        
+                    } catch (error) {
+                        console.error('Error creating depth camera viewer:', error);
+                        container.innerHTML = '<div class="text-center p-4">Error loading depth camera feed. Retrying...</div>';
+                        
+                        // Retry after delay
+                        setTimeout(() => {
+                            this.removeDepthCamera();
+                            this.setupDepthCamera();
+                        }, 3000);
+                    }
+                },
+    
+                removeCamera: function() {
+    const container = document.getElementById('cameraFeed');
+    if (container) {
+        container.innerHTML = '';
+    }
+    // Properly clean up the viewer
+    if (this.cameraViewer) {
+        try {
+            if (this.cameraViewer.canvas && this.cameraViewer.canvas.parentNode) {
+                this.cameraViewer.canvas.parentNode.removeChild(this.cameraViewer.canvas);
+            }
+            this.cameraViewer = null;
+        } catch (e) {
+            console.warn('Error cleaning up camera viewer:', e);
+        }
+    }
+},
+                
+                toggleFullscreen: function(elementId) {
+                    const element = document.getElementById(elementId);
+                    const canvas = element.querySelector('canvas');
+                    
+                    if (!document.fullscreenElement) {
+                        // Store original dimensions before entering fullscreen
+                        element.dataset.originalWidth = element.style.width;
+                        element.dataset.originalHeight = element.style.height;
+                        
+                        // Enter fullscreen - target the element containing the canvas
+                        if (element.requestFullscreen) {
+                            element.requestFullscreen();
+                        } else if (element.webkitRequestFullscreen) {
+                            element.webkitRequestFullscreen();
+                        } else if (element.msRequestFullscreen) {
+                            element.msRequestFullscreen();
+                        }
+                    } else {
+                        // Exit fullscreen
+                        if (document.exitFullscreen) {
+                            document.exitFullscreen();
+                        } else if (document.webkitExitFullscreen) {
+                            document.webkitExitFullscreen();
+                        } else if (document.msExitFullscreen) {
+                            document.msExitFullscreen();
+                        }
+                    }
+                },
+
+            },
+            mounted: function() {
+                const urlParams = new URLSearchParams(window.location.search);
+                this.rosbridge_address = urlParams.get('rosbridge') || 
+                                        localStorage.getItem('rosbridge') || 
+                                        'ws://localhost:9090';
+                
+                // Create joystick handles
+                this.moveHandleEl = document.createElement('div');
+                this.moveHandleEl.className = 'joystick-handle';
+                document.getElementById('moveJoystick').appendChild(this.moveHandleEl);
+                
+                this.rotateHandleEl = document.createElement('div');
+                this.rotateHandleEl.className = 'joystick-handle';
+                document.getElementById('rotateJoystick').appendChild(this.rotateHandleEl);
+                
+                // Update handle positions
+                this.handleUpdateInterval = setInterval(() => {
+                    this.moveHandleEl.style.left = (this.moveHandle.x - 25) + 'px';
+                    this.moveHandleEl.style.top = (this.moveHandle.y - 25) + 'px';
+                    this.rotateHandleEl.style.left = (this.rotateHandle.x - 25) + 'px';
+                    this.rotateHandleEl.style.top = (this.rotateHandle.y - 25) + 'px';
+                }, 50);
+
+                // Add global mouseup listener
+                window.addEventListener('mouseup', () => {
+                    if (this.activeJoystick) {
+                        this.stopDrag(this.activeJoystick);
+                    }
+                });
+                
+                // Add global touchend listener
+                window.addEventListener('touchend', () => {
+                    if (this.activeJoystick) {
+                        this.stopDrag(this.activeJoystick);
+                    }
+                });
+                
+                // Initialize ROS connection
+                this.connect();
+                document.addEventListener('fullscreenchange', this.handleFullscreenChange);
+                document.addEventListener('webkitfullscreenchange', this.handleFullscreenChange);
+                document.addEventListener('msfullscreenchange', this.handleFullscreenChange);
+                
+                this.playStartupSound();
+
+                // Also add the click event listener for browsers that block autoplay
+                document.addEventListener('click', this.playStartupSound);
+                this.updateDateTime();
+                // Update time every minute
+                this.dateTimeInterval = setInterval(this.updateDateTime, 60000);
+                window.addEventListener('resize', this.handleResize);
+            },
+            beforeDestroy: function() {
+                if (this.publishInterval) {
+                    clearInterval(this.publishInterval);
+                }
+                if (this.handleUpdateInterval) {
+                    clearInterval(this.handleUpdateInterval);
+                }
+                if (this.ros) {
+                    this.ros.close();
+                }
+                if (this.dateTimeInterval) {
+                    clearInterval(this.dateTimeInterval);
+                }
+                window.removeEventListener('resize', this.handleResize);
+            },
+            
+            handleFullscreenChange: function() {
+                const cameraFeeds = ['cameraFeed', 'depthCameraFeed'];
+                
+                cameraFeeds.forEach(feedId => {
+                    const element = document.getElementById(feedId);
+                    if (!element) return;
+                    
+                    const canvas = element.querySelector('canvas');
+                    const fullscreenIcon = element.parentElement.querySelector('.fullscreen-toggle i');
+                    
+                    if (document.fullscreenElement === element) {
+                        // In fullscreen mode
+                        if (canvas) {
+                            canvas.style.width = '100%';
+                            canvas.style.height = '100%';
+                            canvas.style.objectFit = 'contain';
+                        }
+                        
+                        // Update icon
+                        if (fullscreenIcon) {
+                            fullscreenIcon.className = 'fas fa-compress';
+                        }
+                        
+                        // Reinitialize the camera feed to properly fit the fullscreen container
+                        if (feedId === 'cameraFeed' && this.activeWindow === 'camera') {
+                            setTimeout(() => {
+                                this.removeCamera();
+                                this.setupCamera();
+                            }, 100);
+                        } else if (feedId === 'depthCameraFeed' && this.activeWindow === 'depth') {
+                            setTimeout(() => {
+                                this.removeDepthCamera();
+                                this.setupDepthCamera();
+                            }, 100);
+                        }
+                    } else {
+                        // Exiting fullscreen mode
+                        if (canvas) {
+                            canvas.style.width = '100%';
+                            canvas.style.height = '100%';
+                            canvas.style.objectFit = 'contain';
+                        }
+                        
+                        // Update icon
+                        if (fullscreenIcon) {
+                            fullscreenIcon.className = 'fas fa-expand';
+                        }
+                        
+                        // Restore original camera feed if needed
+                        if ((feedId === 'cameraFeed' && this.activeWindow === 'camera') ||
+                            (feedId === 'depthCameraFeed' && this.activeWindow === 'depth')) {
+                            setTimeout(() => {
+                                if (feedId === 'cameraFeed') {
+                                    this.removeCamera();
+                                    this.setupCamera();
+                                } else {
+                                    this.removeDepthCamera();
+                                    this.setupDepthCamera();
+                                }
+                            }, 100);
+                        }
+                    }});}
+        });
+    </script>
+</body>
+</html>

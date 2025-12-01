@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROS Connection Interface</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+        integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <script type="text/javascript" src="https://s3.eu-west-1.amazonaws.com/rosject.io/js/roslib.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@5.0.1/lib/eventemitter2.min.js"></script>
+    <script type="text/javascript" src="mjpegcanvas.min.js"></script>
+    <link rel="icon" type="image/png" href="image_inverse_color.png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        #video-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
+            height: auto;
+            z-index: -100;
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: -99;
+        }
+
+        .container {
+            z-index: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            padding: 25px;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .connection-status {
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .connected {
+            background: #4CAF50;
+            box-shadow: 0 0 10px #4CAF50;
+        }
+
+        .disconnected {
+            background: #F44336;
+            box-shadow: 0 0 10px #F44336;
+        }
+
+        .connection-form {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .form-control {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border-radius: 30px;
+            padding: 12px 20px;
+        }
+
+        .form-control:focus {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.4);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+            color: #fff;
+        }
+
+        .btn {
+            border-radius: 30px;
+            padding: 10px 25px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-connect {
+            background: linear-gradient(45deg, #4CAF50, #2E7D32);
+            border: none;
+        }
+
+        .btn-disconnect {
+            background: linear-gradient(45deg, #F44336, #C62828);
+            border: none;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .camera-container {
+            position: relative;
+            overflow: hidden;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .camera-container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+        }
+
+        .camera-label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px;
+            text-align: center;
+            font-weight: 600;
+            z-index: 10;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-weight: 700;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(76, 175, 80, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 1s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .logo {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 20px;
+            background: linear-gradient(45deg, #4CAF50, #2196F3);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        }
+
+        .datetime-display {
+            position: fixed;
+            left: 20px;
+            bottom: 20px;
+            color: white;
+            z-index: 100;
+            background: transparent !important;
+            padding: 0;
+            font-family: monospace;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        #date {
+            margin-bottom: 5px;
+            opacity: 0.9;
+            font-size: 28px;
+            font-weight: 600;
+        }
+
+        #time {
+            font-weight: bold;
+            font-size: 96px; /* Extremely large size */
+            line-height: 1;
+            letter-spacing: 2px;
+            margin-top: -10px; /* Adjust positioning to compensate for huge size */
+        }
+
+        .bottom-right-content {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            text-align: right;
+            z-index: 100;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+        }
+
+        .bottom-right-content .logo {
+            font-size: 1.8rem;
+            margin-bottom: 5px;
+        }
+
+        .bottom-right-content .lead {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+        .logo-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.logo-background {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    padding: 20px;
+    margin-bottom: 15px;
+    transition: all 0.3s ease;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.logo-background:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.logo-image {
+    height: 70px;
+    filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.7));
+}
+
+.logo-text {
+    font-size: 2.5rem;
+    font-weight: 800;
+    background: linear-gradient(45deg, #4CAF50, #2196F3);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+.gif-overlay {
+    position: fixed;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.centered-gif {
+    max-width: 600px;
+    max-height: 600px;
+    z-index: 1001;
+}
+    </style>
+</head>
+
+<body>
+    <!-- Video Background -->
+    <video autoplay muted loop id="video-background">
+        <source src="video.mp4" type="video/mp4">
+        Your browser does not support HTML5 video.
+    </video>
+    <div class="overlay"></div>
+
+    <div id="app" class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-12 text-center mb-5">
+                <div class="logo-container fade-in">
+                <div class="logo-background">
+                    <img src="dia_logo_1.png" alt="Alve Logo" class="logo-image">
+                </div>
+                <div class="logo-text">Alve Web Interface</div>
+            </div>
+            <p class="lead">Connect to your Alve robot with stunning visual feedback</p>
+        </div>
+
+            <!-- Connection Panel -->
+            <div class="col-md-8 col-lg-6 mb-5">
+                <div class="glass-card fade-in">
+                    <div class="connection-status">
+                        <h3>
+                            <span :class="['status-indicator', connected ? 'connected pulse' : 'disconnected']"></span>
+                            Connection Status
+                        </h3>
+                        <p class="h5" :class="{'text-danger': !connected, 'text-success': connected}">
+                            {{ connected ? 'Connected to ROS!' : 'Not connected' }}
+                        </p>
+                    </div>
+
+                    <div class="connection-form mt-4">
+                        <div class="form-group">
+                            <label for="rosbridge-address"><i class="fas fa-link"></i> ROSBridge Address</label>
+                            <input type="text" class="form-control" id="rosbridge-address" 
+                                v-model="rosbridge_address" placeholder="ws://your-rosbridge-address:9090">
+                        </div>
+
+                        <div class="text-center mt-4">
+                            <button :disabled="loading" class="btn btn-disconnect mr-3" 
+                                @click="disconnect" v-if="connected">
+                                <i class="fas fa-plug"></i> Disconnect
+                            </button>
+                            <button :disabled="loading" class="btn btn-connect" 
+                                @click="connect" v-else>
+                                <i class="fas fa-plug"></i> {{ loading ? 'Connecting...' : 'Connect' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Camera Feeds 
+            <div class="col-md-10">
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <div class="glass-card fade-in">
+                            <h4 class="text-center mb-3"><i class="fas fa-camera"></i> Camera One</h4>
+                            <div class="camera-container">
+                                <div id="divCamera"></div>
+                                <div class="camera-label">Topic: /camera_two/image</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <div class="glass-card fade-in">
+                            <h4 class="text-center mb-3"><i class="fas fa-camera"></i> Depth Camera</h4>
+                            <div class="camera-container">
+                                <div id="divCamera2"></div>
+                                <div class="camera-label">Topic: /camera/depth_image_normalized</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        -->
+        </div>
+    </div>
+
+    <script>
+        var app = new Vue({
+            el: '#app',
+            computed: {
+                ws_address: function () {
+                    return `${this.rosbridge_address}`
+                },
+            },
+            data: {
+                connected: false,
+                ros: null,
+                logs: [],
+                loading: false,
+                topic: null,
+                message: null,
+                rosbridge_address: 'ws://localhost:9090',
+                port: '9090',
+            },
+            methods: {
+                connect: function () {
+                    this.loading = true;
+                    this.ros = new ROSLIB.Ros({
+                        url: this.ws_address
+                    });
+                    this.ros.on('connection', () => {
+                        this.logs.unshift((new Date()).toTimeString() + ' - Connected!');
+                        this.connected = true;
+                        this.loading = false;
+                        
+                        // Show GIF overlay
+                        const gifOverlay = document.getElementById('gif-overlay');
+                        if (gifOverlay) {
+                            gifOverlay.style.display = 'flex';
+                        }
+                        
+                        // Redirect after 5 seconds
+                        setTimeout(() => {
+                            window.location.href = 'control.html';
+                        }, 5000);
+                    });
+                    this.ros.on('error', (error) => {
+                        this.logs.unshift((new Date()).toTimeString() + ` - Error: ${error}`);
+                        this.loading = false;
+                    });
+                    this.ros.on('close', () => {
+                        this.logs.unshift((new Date()).toTimeString() + ' - Disconnected!');
+                        this.connected = false;
+                        this.loading = false;
+                    });
+                },
+                disconnect: function () {
+                    this.ros.close()
+                },
+                setCamera: function () {
+                    let wsUrl = new URL(this.rosbridge_address);
+                    let host = wsUrl.hostname;
+                    let port = '8080';
+                    
+                    let viewer = new MJPEGCANVAS.Viewer({
+                        divID: 'divCamera',
+                        host: host + ':' + port,
+                        width: 500,
+                        height: 400,
+                        topic: '/camera_two/image',
+                    });
+                },
+                setCamera2: function () {
+                    let wsUrl = new URL(this.rosbridge_address);
+                    let host = wsUrl.hostname;
+                    let port = '8080';
+                    
+                    let viewer = new MJPEGCANVAS.Viewer({
+                        divID: 'divCamera2',
+                        host: host + ':' + port,
+                        width: 500,
+                        height: 400,
+                        topic: '/camera/depth_image_normalized',
+                        transport: 'raw'
+                    });
+                },
+            },
+            mounted() {
+                // Set default address
+                this.rosbridge_address = 'ws://localhost:9090';
+            }
+        })
+
+        function updateDateTime() {
+    const now = new Date();
+    
+    // Custom format: "Sun, 24 August 2025"
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+                   'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    const dayName = days[now.getDay()];
+    const day = now.getDate();
+    const monthName = months[now.getMonth()];
+    const year = now.getFullYear();
+    
+    const date = `${dayName}, ${day} ${monthName} ${year}`;
+    
+    // Format time as HH:MM (24h format) - without seconds
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const time = `${hours}:${minutes}`;
+    
+    // Check if elements exist before trying to update them
+    const dateElement = document.getElementById('date');
+    const timeElement = document.getElementById('time');
+    
+    if (dateElement && timeElement) {
+        dateElement.textContent = date;
+        timeElement.textContent = time;
+    }
+}
+
+// Update immediately and set interval
+updateDateTime();
+setInterval(updateDateTime, 1000);
+    </script>
+
+    <div id="datetime" class="datetime-display">
+    <span id="date"></span>
+    <span id="time"></span>
+</div>
+
+<div id="gif-overlay" class="gif-overlay" style="display: none;">
+    <img src="dia_logo.gif" alt="Loading GIF" class="centered-gif">
+</div>
+</body>
+
+</html>
