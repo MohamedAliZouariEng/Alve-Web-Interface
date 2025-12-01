@@ -103,6 +103,6 @@ To enable full web-based functionality, you must launch three core services in s
 
 See the **Alve Web Interface** in action, showcasing real-time teleoperation, sensor visualization, and the quad-view layout.
 
-[![Watch the Live Demo on Vimeo](https://img.shields.io/badge/Watch%20Demo-Vimeo-1AB7EA?style=for-the-badge&logo=vimeo)](https://vimeo.com/user/242059085/folder/27481654?fl=tl&fe=cc)
+[![Watch the Live Demo on Vimeo](https://img.shields.io/badge/Watch%20Demo-Vimeo-1AB7EA?style=for-the-badge&logo=vimeo)](https://vimeo.com/user242059085)
 
 ---
